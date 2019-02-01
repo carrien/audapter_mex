@@ -96,6 +96,7 @@ public:
 		TYPE_BOOL_ARRAY,
 		TYPE_INT_ARRAY, 
 		TYPE_DOUBLE_ARRAY, 
+		TYPE_DOUBLE_2DARRAY, //2D pert field edit
 		TYPE_PVOC_WARP, 
 		TYPE_SMN_RMS_FF,
         TYPE_TIME_DOMAIN_PITCH_SHIFT_SCHEDULE,
@@ -133,7 +134,10 @@ public:
     void addDoubleArrayParam(const char* name, const char* helpMsg) {
         addParam(name, helpMsg, TYPE_DOUBLE_ARRAY);
     }
-
+	void addDouble2DArrayParam(const char* name, const char* helpMsg) {
+		addParam(name, helpMsg, TYPE_DOUBLE_2DARRAY);
+	} //2D pert field edit
+	
 	paramType checkParam(const char *name);
 };
 
@@ -450,9 +454,12 @@ private:
 		dtype F1Max;
 		dtype LBk;
 		dtype LBb;
+		dtype pertF1[pfNPoints]; //2D pert field edit
 		dtype pertF2[pfNPoints];		
-		dtype pertPhi[pfNPoints];
-		dtype pertAmp[pfNPoints];
+		dtype pertPhi[pfNPoints][pfNPoints]; //2D pert field edit
+		dtype pertAmp[pfNPoints][pfNPoints]; //2D pert field edit
+		//dtype pertPhi[pfNPoints];
+		//dtype pertAmp[pfNPoints];
 		dtype minVowelLen;
 		
 		bool transDone;
@@ -528,6 +535,7 @@ private:
 	
 	dtype Audapter::hz2mel(dtype hz);
 	dtype Audapter::mel2hz(dtype hz);
+	dtype Audapter::locateF1(dtype f2); //2D pert field edit
 	dtype Audapter::locateF2(dtype f2);
 
 	void	DSPF_dp_cfftr2(int n, dtype * x, dtype * w, int n_min);

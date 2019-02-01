@@ -199,9 +199,12 @@ Audapter::Audapter() :
     params.addDoubleArrayParam("pitchshiftratio", "Pitch-shifting: ratio (1.0 = no shift)");
       
 	params.addDoubleArrayParam("datapb", "Waveform for playback");
+	params.addDoubleArrayParam("pertf1", "Formant perturbation field: F1 grid (Hz)"); //2D pert field edit
 	params.addDoubleArrayParam("pertf2", "Formant perturbation field: F2 grid (Hz)");
-	params.addDoubleArrayParam("pertamp", "Formant perturbation field: Perturbation vector amplitude");
-	params.addDoubleArrayParam("pertphi", "Formant perturbation field: Perturbation vector angle");
+	params.addDouble2DArrayParam("pertamp", "Formant perturbation field: Perturbation vector amplitude");
+	params.addDouble2DArrayParam("pertphi", "Formant perturbation field: Perturbation vector angle");
+	//params.addDoubleArrayParam("pertamp", "Formant perturbation field: Perturbation vector amplitude");
+	//params.addDoubleArrayParam("pertphi", "Formant perturbation field: Perturbation vector angle");
 	params.addDoubleArrayParam("gain", "Global intensity gain");
 
 	params.addDoubleArrayParam("tsgtonedur", "Tone sequence generator: tone durations (s)");
@@ -236,7 +239,7 @@ Audapter::Audapter() :
         "2 - pp_valleys: adjusts pitch cycle based on waveform minimum.\n",
         Parameter::TYPE_TIME_DOMAIN_PITCH_SHIFT_ALGORITHM);
 
-	int		n;
+	int		n,m;
 
 	strcpy_s(deviceName, sizeof(deviceName), "MOTU MicroBook");
 		
@@ -346,11 +349,16 @@ Audapter::Audapter() :
 	p.F1Max		= 0;		// Right boundary of the perturbation field (mel)
 	p.LBk		= 0;		// The slope of a tilted boundary: F2 = p.LBk * F1 + p.LBb. (mel/mel)
 	p.LBb		= 0;		// The intercept of a tilted boundary (mel)
-
+	//2D pert field edit
 	for(n=0;n<pfNPoints;n++){
-		p.pertF2[n]=0;			// Independent variable of the perturbation vectors
-		p.pertAmp[n]=0;			// Magnitude of the perturbation vectors (mel)
-		p.pertPhi[n]=0;			// Angle of the perturbation vectors (rad). 0 corresponds to the x+ axis. Increase in the countetclockwise direction. 
+		p.pertF1[n] = 0;			// Independent variable of the perturbation vectors, 2D pert field edit
+		p.pertF2[n] = 0;			// Independent variable of the perturbation vectors
+		for (m = 0; m < pfNPoints; m++) {
+			p.pertAmp[n][m] = 0;			// Magnitude of the perturbation vectors (mel), 2D pert field edit
+			p.pertPhi[n][m] = 0;			// Angle of the perturbation vectors (rad). 0 corresponds to the x+ axis. Increase in the countetclockwise direction. 2D pert field edit
+			//p.pertAmp[n] = 0;			// Magnitude of the perturbation vectors (mel)
+			//p.pertPhi[n] = 0;			// Angle of the perturbation vectors (rad). 0 corresponds to the x+ axis. Increase in the countetclockwise direction. 
+		}
 	}
 
 	p.minVowelLen=60;
@@ -899,9 +907,13 @@ void *Audapter::setGetParam(bool bSet,
 	else if (ns == string("f2max")) {
 		ptr = (void *)&p.F2Max;
 	}
-	else if (ns == string("pertf2")) {
-		ptr = (void *)p.pertF2;
+	else if (ns == string("pertf1")) {
+		ptr = (void *)p.pertF1;
 		len = pfNPoints;
+	} //2D pert field edit
+	else if (ns == string("pertf2")) {
+	ptr = (void *)p.pertF2;
+	len = pfNPoints;
 	}
 	else if (ns == string("pertamp")) {
 		ptr = (void *)p.pertAmp;
@@ -1140,6 +1152,18 @@ void *Audapter::setGetParam(bool bSet,
 			for (int i = 0; i < len; i++) {
 				*((dtype *)ptr + i) = static_cast<dtype>(*((dtype *)value + i));
 			}
+		}
+		else if (pType == Parameter::TYPE_DOUBLE_2DARRAY) {
+			for (int i = 0; i < len; i++) {
+				for (int j = 0; j < len; j++) {
+					*((dtype *)ptr + i) = static_cast<dtype>(*((dtype *)value + i));
+				}
+			}
+		}
+		else if (pType == Parameter::TYPE_DOUBLE_2DARRAY) {
+			for (int i = 0; i < len; i++) {
+				*((dtype *)ptr + i) = static_cast<dtype>(*((dtype *)value + i));
+			} //2D pert field edit
 
 			if ( ns == string("datapb") ) { /* Zero out the remaining part */
 				for (int i = len; i < maxPBSize; i++)
@@ -1511,8 +1535,11 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 	static bool maintain_trans = false;
 	bool above_rms = false;
 	bool during_pitchShift = false;
-	dtype sf1m, sf2m, loc, locfrac, mphi, mamp;
-	int locint, n;
+	dtype sf1m, sf2m, locf1, locf2, locfracf1,locfracf2, mphi, mamp; //2D pert field edit
+	//dtype sf1m, sf2m, loc, locfrac, mphi, mamp;
+	int locintf1, locintf2, n, m; //2D pert field edit
+	//int locint, n;
+
 
 	/* Temporary buffer for holding output before duplexing into stereo */
 	dtype outputBuf[maxFrameLen];
@@ -1679,9 +1706,15 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 			if (during_trans && above_rms) {  // Determine whether the current point in perturbation field
 			    // yes : windowed deviation over x coordinate
-				loc = locateF2(f2mp);	// Interpolation (linear)								
-                locint = static_cast<int>(floor(loc));
-				locfrac = loc - locint;
+				locf1 = locateF1(f1m);	// Interpolation (linear) 2D pert field edit
+				locf2 = locateF2(f2mp);	// Interpolation (linear) 2D pert field edit
+				//loc = locateF2(f2mp);	// Interpolation (linear)	
+                locintf1 = static_cast<int>(floor(locf1)); //2D pert field edit
+				locfracf1 = locf1 - locintf1; //2D pert field edit
+				locintf2 = static_cast<int>(floor(locf2)); //2D pert field edit
+				locfracf2 = locf1 - locintf2;
+				//locint = static_cast<int>(floor(loc));
+				//locfrac = loc - locint;
 				
 				/* That using ost and pcf files overrides the perturbatoin field 
 					specified with pertF2, pertAmp, pertPhi. */
@@ -1690,8 +1723,10 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 					mphi = pertCfg.fmtPertPhi[stat];
 				}
 				else {
-					mamp = p.pertAmp[locint] + locfrac*(p.pertAmp[locint + 1] - p.pertAmp[locint]);	// Interpolaton (linear)
-					mphi = p.pertPhi[locint] + locfrac*(p.pertPhi[locint + 1] - p.pertPhi[locint]);
+					mamp = p.pertAmp[locintf1][locintf2]; + (locfracf1*(p.pertAmp[locintf1 + 1][locintf2] - p.pertAmp[locintf1][locintf2]) + locfracf2*(p.pertAmp[locintf1][locintf2+1] - p.pertAmp[locintf1][locintf2]))/2;	// Interpolaton (linear),2D pert field edit
+					mphi = p.pertPhi[locintf1][locintf2]; + (locfracf1*(p.pertPhi[locintf1 + 1][locintf2] - p.pertPhi[locintf1][locintf2]) + locfracf2*(p.pertPhi[locintf1][locintf2+1] - p.pertPhi[locintf1][locintf2]))/2; //2D pert field edit
+					//mamp = p.pertAmp[locint] + locfrac * (p.pertAmp[locint + 1] - p.pertAmp[locint]);	// Interpolaton (linear)
+					//mphi = p.pertPhi[locint] + locfrac * (p.pertPhi[locint + 1] - p.pertPhi[locint]);
 				}
 
 				if (!p.bRatioShift){	// Absoluate shift					
@@ -2505,6 +2540,35 @@ dtype Audapter::mel2hz(dtype mel){	// Convert frequency from mel to Hz
 	dtype hz;
 	hz=(exp(mel/1127.01048)-1)*700;
 	return hz;
+}
+
+dtype Audapter::locateF1(dtype f1) {
+	//SC Locate the value of f2 in the pertF1 table, through a binary search.
+	//SC Usef for subsequent interpolation.
+	//2D pert field edit
+	dtype loc;
+	int k = 1 << (pfNBit - 1), n;
+
+	for (n = 0; n < pfNBit - 1; n++) {
+		if (f1 >= p.pertF1[k])
+			k = k + (1 << (pfNBit - n - 2));
+		else
+			k = k - (1 << (pfNBit - n - 2));
+	}
+	if (f1 < p.pertF1[k])
+		k--;
+
+	loc = static_cast<dtype>(k);
+
+	loc += (f1 - p.pertF1[k]) / (p.pertF1[k + 1] - p.pertF1[k]);
+
+	if (loc >= pfNPoints - 1) {	//pfNPoints=257, so locint not be greater than 255 (pfNPoints-2)
+		loc = pfNPoints - 1 - 0.000000000001;
+	}
+	if (loc < 0) {
+		loc = 0;
+	}
+	return loc;
 }
 
 dtype Audapter::locateF2(dtype f2){	
