@@ -466,20 +466,20 @@ Audapter::Audapter() :
 	b_filt2[0] = 1;
 
 	/* Filters */
-	/*const dtype t_srfilt_a[ncoeffssrfilt] = {1.000000000000000000000000, -4.137689759094149300000000, 11.417342955970334000000000, -21.230389508442666000000000, 
+	const dtype t_srfilt_a[nCoeffsSRFilt] = {1.000000000000000000000000, -4.137689759094149300000000, 11.417342955970334000000000, -21.230389508442666000000000,
 											 31.507204607241498000000000, -36.677292780605917000000000, 36.042584528469732000000000, -28.996821243768743000000000, 
 											 20.262367357856544000000000, -11.637468104552259000000000, 5.968975493498319000000000, -2.417954280896708500000000, 
 											 0.941027354810217260000000, -0.241109659478893040000000, 0.083935453370180629000000, -0.005511361553189712100000, 
 											 0.006142808678570149300000, 0.001292100725808184000000, 0.000588047191250507470000, 0.000146757274221299580000, 
 											 0.000035865709068928935000};
-	const dtype t_srfilt_b[ncoeffssrfilt] = {0.005985366448016847400000, -0.000000000068663473436596, 0.029926833561855812000000, 0.014963399494903253000000, 
+	const dtype t_srfilt_b[nCoeffsSRFilt] = {0.005985366448016847400000, -0.000000000068663473436596, 0.029926833561855812000000, 0.014963399494903253000000,
 											 0.072946803942075492000000, 0.066399110082245749000000, 0.128831523706446540000000, 0.141307195958322970000000, 
 											 0.183515087779119460000000, 0.196038702055692930000000, 0.207578586483177310000000, 0.196038702055692630000000, 
 											 0.183515087779119760000000, 0.141307195958322280000000, 0.128831523706446790000000, 0.066399110082245277000000, 
 											 0.072946803942075533000000, 0.014963399494903067000000, 0.029926833561855826000000, -0.000000000068663525932820, 
-											 0.005985366448016846500000};*/
-	//if (p.sr > 16000) 
-		const dtype t_srfilt_a[nCoeffsSRFilt] = { 1.0000000000000000000, 3.4481656492253330000, 9.9677395770288580000, 20.3563883964761500000, 35.3515451698157000000, 
+											 0.005985366448016846500000};
+	//if (p.sr > 16000)
+	/* const dtype t_srfilt_a[nCoeffsSRFilt] = { 1.0000000000000000000, 3.4481656492253330000, 9.9677395770288580000, 20.3563883964761500000, 35.3515451698157000000,
 			51.3378381681464600000, 65.0847255760543000000, 72.1895242327609500000, 70.9375513295429300000, 61.8795384032066100000,
 			48.0368536403349900000, 33.1365872297097100000, 20.2446398086081300000, 10.8839382556327500000, 5.0988600871107350000,
 			2.0511226618448560000, 0.6931641143765566000, 0.1902388505692541000, 0.0400780264331726300, 0.0058210765566203220,
@@ -488,7 +488,7 @@ Audapter::Audapter() :
 			14.79589600478253000, 26.75618128948480000, 41.78558255267905000, 57.03426036978479000, 68.54991411127352000,
 			72.85151472689256000, 68.54991411127358000, 57.03426036978490000, 41.78558255267917000, 26.75618128948491000,
 			14.79589600478261000, 6.93664353530823300, 2.67755927192332300, 0.81002913025496460, 0.17449492990123360,
-			0.02106340131664512 };
+			0.02106340131664512 }; */
 
 	downSampFilter.setCoeff(nCoeffsSRFilt, t_srfilt_a, nCoeffsSRFilt, t_srfilt_b);
 	upSampFilter.setCoeff(nCoeffsSRFilt, t_srfilt_a, nCoeffsSRFilt, t_srfilt_b);
@@ -1152,23 +1152,18 @@ void *Audapter::setGetParam(bool bSet,
 			for (int i = 0; i < len; i++) {
 				*((dtype *)ptr + i) = static_cast<dtype>(*((dtype *)value + i));
 			}
-		}
-		else if (pType == Parameter::TYPE_DOUBLE_2DARRAY) {
-			for (int i = 0; i < len; i++) {
-				for (int j = 0; j < len; j++) {
-					*((dtype *)ptr + i) = static_cast<dtype>(*((dtype *)value + i));
-				}
-			}
-		}
-		else if (pType == Parameter::TYPE_DOUBLE_2DARRAY) {
-			for (int i = 0; i < len; i++) {
-				*((dtype *)ptr + i) = static_cast<dtype>(*((dtype *)value + i));
-			} //2D pert field edit
 
-			if ( ns == string("datapb") ) { /* Zero out the remaining part */
+			if (ns == string("datapb")) { /* Zero out the remaining part */
 				for (int i = len; i < maxPBSize; i++)
 					*((dtype *)ptr + i) = 0.0;
 			}
+		}
+		else if (pType == Parameter::TYPE_DOUBLE_2DARRAY) {
+			for (int i = 0; i < len; i++) {
+				for (int j = 0; j < len; j++) { //transpose input matrix to support Matlab-style row,col indexing
+					*((dtype *)ptr + i * len + j) = static_cast<dtype>(*((dtype *)value + j * len + i));
+				}
+			}			
 		}
 		else if (pType == Parameter::TYPE_PVOC_WARP) {
 			pertCfg.addWarpCfg(*((double *)value), *((double *)value + 1), 
@@ -1335,6 +1330,16 @@ void *Audapter::setGetParam(bool bSet,
 					}
 				}
 			}
+			else if (pType == Parameter::TYPE_DOUBLE_2DARRAY) {
+				oss << "[";
+				for (int i = 0; i < len*len; i++) {
+					oss << *((dtype *)ptr + i);
+					if (i < len*len - 1)
+						oss << ", ";
+					else
+						oss << "]";
+				}
+			}
 			oss << endl;
 
 			mexPrintf(oss.str().c_str());
@@ -1433,7 +1438,7 @@ void Audapter::queryParam(const char *name, mxArray **output) {
 	if (pType == Parameter::TYPE_BOOL || pType == Parameter::TYPE_BOOL_ARRAY
 		|| pType == Parameter::TYPE_INT || pType == Parameter::TYPE_INT_ARRAY
 		|| pType == Parameter::TYPE_DOUBLE || pType == Parameter::TYPE_DOUBLE_ARRAY) {
-		
+
 		*output = mxCreateDoubleMatrix(1, length, mxREAL);
 		double *output_ptr = mxGetPr(*output);
 
@@ -1446,6 +1451,17 @@ void Audapter::queryParam(const char *name, mxArray **output) {
 			}
 			else if (pType == Parameter::TYPE_DOUBLE || pType == Parameter::TYPE_DOUBLE_ARRAY) {
 				output_ptr[i] = *((double *)val + i);
+			}
+		}
+	}
+	else if (pType == Parameter::TYPE_DOUBLE_2DARRAY) {
+
+		*output = mxCreateDoubleMatrix(length, length, mxREAL);
+		double *output_ptr = mxGetPr(*output);
+
+		for (int i = 0; i < length; i++) {
+			for (int j = 0; j < length; j++) {
+				output_ptr[i*length+j] = *((double *)val + j*length+i);
 			}
 		}
 	}
@@ -1723,8 +1739,8 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 					mphi = pertCfg.fmtPertPhi[stat];
 				}
 				else {
-					mamp = p.pertAmp[locintf1][locintf2]; + (locfracf1*(p.pertAmp[locintf1 + 1][locintf2] - p.pertAmp[locintf1][locintf2]) + locfracf2*(p.pertAmp[locintf1][locintf2+1] - p.pertAmp[locintf1][locintf2]))/2;	// Interpolaton (linear),2D pert field edit
-					mphi = p.pertPhi[locintf1][locintf2]; + (locfracf1*(p.pertPhi[locintf1 + 1][locintf2] - p.pertPhi[locintf1][locintf2]) + locfracf2*(p.pertPhi[locintf1][locintf2+1] - p.pertPhi[locintf1][locintf2]))/2; //2D pert field edit
+					mamp = p.pertAmp[locintf1][locintf2]; //+ (locfracf1*(p.pertAmp[locintf1 + 1][locintf2] - p.pertAmp[locintf1][locintf2]) + locfracf2*(p.pertAmp[locintf1][locintf2+1] - p.pertAmp[locintf1][locintf2]))/2;	// Interpolaton (linear),2D pert field edit
+					mphi = p.pertPhi[locintf1][locintf2]; //+ (locfracf1*(p.pertPhi[locintf1 + 1][locintf2] - p.pertPhi[locintf1][locintf2]) + locfracf2*(p.pertPhi[locintf1][locintf2+1] - p.pertPhi[locintf1][locintf2]))/2; //2D pert field edit
 					//mamp = p.pertAmp[locint] + locfrac * (p.pertAmp[locint + 1] - p.pertAmp[locint]);	// Interpolaton (linear)
 					//mphi = p.pertPhi[locint] + locfrac * (p.pertPhi[locint + 1] - p.pertPhi[locint]);
 				}
